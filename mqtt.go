@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -32,7 +33,8 @@ func mqttConnect(server string, port int) (mqtt.ClientCloser, error) {
 		return nil, err
 	}
 
-	_, err = client.Connect(ctx, "myself")
+	rand.Seed(time.Now().UnixNano())
+	_, err = client.Connect(ctx, fmt.Sprint(rand.Uint64()))
 	if err != nil {
 		return nil, err
 	}

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"time"
+
+	"github.com/vapourismo/knx-go/knx"
 )
 
 const (
@@ -12,35 +14,29 @@ const (
 )
 
 type Event struct {
-	Time        time.Time
-	Gateway     string
-	Command     string
-	Source      string
-	Destination string
-	Data        []byte
+	Time    time.Time
+	Gateway string
+	knx.GroupEvent
 }
 
-/*
-func FromJSON(b []byte) knx.GroupEvent {
-	var my MyGroupEvent
-	var ret knx.GroupEvent
-
-	json.Unmarshal(b, &my)
-
-	switch my.Command {
-	case "read", "Read":
-		ret.Command = knx.GroupRead
-	case "write", "Write":
-		ret.Command = knx.GroupWrite
-	case "response", "Response":
-		ret.Command = knx.GroupResponse
+func (e Event) MarshalJSON() ([]byte, error) {
+	var tmp struct {
+		Time        time.Time
+		Gateway     string
+		Command     string
+		Source      string
+		Destination string
+		Data        []byte
 	}
-	// ret.Source, _ = cemi.NewIndividualAddrString(my.Source)
-	ret.Destination, _ = cemi.NewGroupAddrString(my.Destination)
-	ret.Data = my.Data
-	return ret
+	tmp.Time = e.Time.Truncate(time.Second)
+	tmp.Gateway = e.Gateway
+	tmp.Command = e.Command.String()
+	tmp.Source = e.Source.String()
+	tmp.Destination = e.Destination.String()
+	tmp.Data = e.Data
+	return json.Marshal(tmp)
+
 }
-*/
 
 func (s *Server) MQTT(server string, prefix string) (fromMQTT chan Event, toMQTT chan Event) {
 	in := make(chan Event, 5)
@@ -67,9 +63,12 @@ func (s *Server) MQTT(server string, prefix string) (fromMQTT chan Event, toMQTT
 		for {
 			select {
 			case m := <-mqttChan:
-				log.Printf("MQTT: got MQTT packet: %v", m)
-				out <- Event{}
-				log.Printf("MQTT: packet sent to program")
+				if s.Debug {
+					log.Printf("MQTT: got MQTT packet: %v", m)
+				}
+				var e Event
+				_ = json.Unmarshal(m.Payload, &e)
+				out <- e
 			case event := <-in:
 				topic := fmt.Sprintf("%s/%v", prefix, event.Destination)
 				b, _ := json.Marshal(event)
