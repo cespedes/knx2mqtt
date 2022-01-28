@@ -113,7 +113,9 @@ func (s *Server) KNX(gateways []string) (fromKNX chan Event, toKNX chan Event) {
 				for _, gw := range gateways {
 					for _, gaddr := range gws[gw].Addresses {
 						if check == (gaddr & mask) {
-							log.Printf("(i=%d) wanna write to %s; %q sent packet to %s :)", i, addr, gw, gaddr)
+							if s.Debug {
+								log.Printf("(i=%d) wanna write to %s; %q sent packet to %s :)", i, addr, gw, gaddr)
+							}
 							client = &gws[gw].Client
 							break knxCheckLoop
 						}

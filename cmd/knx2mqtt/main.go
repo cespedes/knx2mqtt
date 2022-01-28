@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/vapourismo/knx-go/knx"
+	"github.com/vapourismo/knx-go/knx/cemi"
 )
 
 const (
@@ -35,7 +36,41 @@ func (e Event) MarshalJSON() ([]byte, error) {
 	tmp.Destination = e.Destination.String()
 	tmp.Data = e.Data
 	return json.Marshal(tmp)
+}
 
+func (e *Event) UnmarshalJSON(b []byte) error {
+	var tmp struct {
+		Time        time.Time
+		Gateway     string
+		Command     string
+		Source      string
+		Destination string
+		Data        []byte
+	}
+	err := json.Unmarshal(b, &tmp)
+	if err != nil {
+		return err
+	}
+	e.Time = tmp.Time
+	e.Gateway = tmp.Gateway
+	switch tmp.Command {
+	case "read", "Read":
+		e.Command = knx.GroupRead
+	case "write", "Write":
+		e.Command = knx.GroupWrite
+	case "response", "Response":
+		e.Command = knx.GroupResponse
+	}
+	e.Source, err = cemi.NewIndividualAddrString(tmp.Source)
+	if err != nil {
+		return err
+	}
+	e.Destination, err = cemi.NewGroupAddrString(tmp.Destination)
+	if err != nil {
+		return err
+	}
+	e.Data = tmp.Data
+	return nil
 }
 
 func (s *Server) MQTT(server string, prefix string) (fromMQTT chan Event, toMQTT chan Event) {
@@ -54,8 +89,8 @@ func (s *Server) MQTT(server string, prefix string) (fromMQTT chan Event, toMQTT
 			log.Printf("MQTT: Connected.")
 		}
 
-		subTopic := fmt.Sprintf("%s/#", prefix)
-		mqttChan, err := client.Subscribe(fmt.Sprintf("%s/cmd", prefix))
+		subTopic := fmt.Sprintf("%s/cmd", prefix)
+		mqttChan, err := client.Subscribe(subTopic)
 		if err != nil {
 			log.Fatalf("MQTT: subscribing to %s: %v", subTopic, err)
 		}
@@ -115,7 +150,9 @@ func main() {
 			}
 			toMQTT <- m
 		case m := <-fromMQTT:
-			log.Printf("MQTT -> KNX: %v", m)
+			if s.Debug {
+				log.Printf("MQTT -> KNX: %v", m)
+			}
 			toKNX <- m
 		}
 	}

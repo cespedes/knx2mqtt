@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/vapourismo/knx-go/knx"
@@ -65,6 +66,24 @@ func (e *Event) UnmarshalJSON(b []byte) error {
 	}
 	e.Data = tmp.Data
 	return nil
+}
+
+func (e Event) MarshalJSON() ([]byte, error) {
+	var tmp struct {
+		Time        time.Time
+		Gateway     string
+		Command     string
+		Source      string
+		Destination string
+		Data        []byte
+	}
+	tmp.Time = e.Time.Truncate(time.Second)
+	tmp.Gateway = e.Gateway
+	tmp.Command = e.Command.String()
+	tmp.Source = e.Source.String()
+	tmp.Destination = e.Destination.String()
+	tmp.Data = e.Data
+	return json.Marshal(tmp)
 }
 
 func (e Event) String() string {
@@ -146,7 +165,42 @@ func main() {
 
 			s.Log(e)
 		case msg := <-mqttChan2:
-			fmt.Printf("received MQTT command: %s\n", string(msg.Payload))
+			cmd := strings.Split(string(msg.Payload), " ")
+			if len(cmd) != 2 {
+				fmt.Printf("received wrong MQTT command: %q\n", string(msg.Payload))
+				continue
+			}
+			groupName := cmd[0]
+			value := cmd[1]
+			var groupAddr cemi.GroupAddr
+			var DPT string
+			for key, val := range config.Addresses {
+				if groupName == val.Name {
+					groupAddr = key
+					DPT = val.DPT
+					break
+				}
+			}
+			if groupAddr == 0 || DPT == "" {
+				fmt.Printf("received command to wrong group: %q\n", string(msg.Payload))
+				continue
+			}
+			dp, ok := dpt.Produce(DPT)
+			if !ok {
+				fmt.Printf("Error: unknown type %v in config file\n", DPT)
+				continue
+			}
+			err := SetDPTFromString(dp, value)
+			if err != nil {
+				fmt.Printf("received wrong value in MQTT command: %q\n", string(msg.Payload))
+				continue
+			}
+			fmt.Printf("MQTT: received %q: will write %v to %s\n", msg.Payload, dp.Pack(), groupAddr.String())
+			topic := fmt.Sprintf("%s/cmd", config.MQTTPrefix1)
+			groupEvent := knx.GroupEvent{Command: knx.GroupWrite, Destination: groupAddr, Data: dp.Pack()}
+			event := Event{Time: time.Now(), GroupEvent: groupEvent}
+			b, _ := event.MarshalJSON()
+			client.Publish(topic, string(b))
 		}
 	}
 }
