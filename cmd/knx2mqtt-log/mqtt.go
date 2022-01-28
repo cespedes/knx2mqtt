@@ -92,7 +92,6 @@ func NewMQTTClient(server string, port int) (*MQTTClient, error) {
 func (m *MQTTClient) Publish(topic string, payload string) error {
 	var err error
 
-	//log.Printf("MQTT: Publishing %s=%s\n", topic, payload)
 	m.mutex.Lock()
 	client := m.client
 	m.mutex.Unlock()
