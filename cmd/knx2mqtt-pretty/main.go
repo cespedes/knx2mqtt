@@ -140,7 +140,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	mqttChan1, err := client.Subscribe(fmt.Sprintf("%s/#", config.MQTTPrefix1))
+	mqttChan1, err := client.Subscribe(fmt.Sprintf("%s/+/+/+", config.MQTTPrefix1))
 	mqttChan2, err := client.Subscribe(fmt.Sprintf("%s/cmd", config.MQTTPrefix2))
 	for {
 		select {
@@ -148,6 +148,13 @@ func main() {
 			var e Event
 			_ = json.Unmarshal(msg.Payload, &e)
 
+			// Log packet:
+			s.Log(e)
+
+			// Send prettified packet to MQTT:
+			if e.Command != knx.GroupWrite && e.Command != knx.GroupResponse {
+				break
+			}
 			if nt, ok := config.Addresses[e.Destination]; ok {
 				dp, ok := dpt.Produce(nt.DPT)
 				if !ok {
@@ -162,16 +169,25 @@ func main() {
 				value := e.Time.Format("20060102-150405") + " " + fmt.Sprint(dp)
 				err = client.PublishRetain(topic, value)
 			}
-
-			s.Log(e)
 		case msg := <-mqttChan2:
 			cmd := strings.Split(string(msg.Payload), " ")
-			if len(cmd) != 2 {
+			var command knx.GroupCommand
+			switch {
+			case len(cmd) < 2,
+				cmd[0] != "write" && cmd[0] != "read" && cmd[0] != "response",
+				cmd[0] == "write" && len(cmd) != 3,
+				cmd[0] == "read" && len(cmd) != 2,
+				cmd[0] == "response" && len(cmd) != 3:
 				fmt.Printf("received wrong MQTT command: %q\n", string(msg.Payload))
 				continue
+			case cmd[0] == "read":
+				command = knx.GroupRead
+			case cmd[0] == "response":
+				command = knx.GroupResponse
+			case cmd[0] == "write":
+				command = knx.GroupWrite
 			}
-			groupName := cmd[0]
-			value := cmd[1]
+			groupName := cmd[1]
 			var groupAddr cemi.GroupAddr
 			var DPT string
 			for key, val := range config.Addresses {
@@ -190,14 +206,18 @@ func main() {
 				fmt.Printf("Error: unknown type %v in config file\n", DPT)
 				continue
 			}
-			err := SetDPTFromString(dp, value)
-			if err != nil {
-				fmt.Printf("received wrong value in MQTT command: %q\n", string(msg.Payload))
-				continue
+			if command == knx.GroupResponse || command == knx.GroupWrite {
+				value := cmd[2]
+				err := SetDPTFromString(dp, value)
+				if err != nil {
+					fmt.Printf("received wrong value in MQTT command: %q\n", string(msg.Payload))
+					continue
+				}
 			}
-			fmt.Printf("MQTT: received %q: will write %v to %s\n", msg.Payload, dp.Pack(), groupAddr.String())
+			data := dp.Pack()
+			fmt.Printf("MQTT: received cmd %q: will send packet to %s\n", msg.Payload, groupAddr.String())
 			topic := fmt.Sprintf("%s/cmd", config.MQTTPrefix1)
-			groupEvent := knx.GroupEvent{Command: knx.GroupWrite, Destination: groupAddr, Data: dp.Pack()}
+			groupEvent := knx.GroupEvent{Command: command, Destination: groupAddr, Data: data}
 			event := Event{Time: time.Now(), GroupEvent: groupEvent}
 			b, _ := event.MarshalJSON()
 			client.Publish(topic, string(b))
