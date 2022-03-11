@@ -4,6 +4,7 @@ go 1.17
 
 require (
 	github.com/at-wat/mqtt-go v0.16.0
+	github.com/gorilla/websocket v1.4.2
 	github.com/vapourismo/knx-go v0.0.0-20220125154407-729c89830c6e
 )
 
