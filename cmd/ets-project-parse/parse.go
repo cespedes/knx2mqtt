@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/xml"
 	"io"
+	"sort"
+	"strconv"
 )
 
 type Project struct {
@@ -73,6 +75,46 @@ func ParseProject(r io.Reader) (*Project, error) {
 	err := d.Decode(&k)
 	if err != nil {
 		return nil, err
+	}
+
+	// Sort everything:
+	sort.Slice(k.Topology.Area, func(i, j int) bool {
+		a1, _ := strconv.Atoi(k.Topology.Area[i].Address)
+		a2, _ := strconv.Atoi(k.Topology.Area[j].Address)
+		return a1 < a2
+	})
+	for _, a := range k.Topology.Area {
+		sort.Slice(a.Line, func(i, j int) bool {
+			a1, _ := strconv.Atoi(a.Line[i].Address)
+			a2, _ := strconv.Atoi(a.Line[j].Address)
+			return a1 < a2
+		})
+		for _, l := range a.Line {
+			sort.Slice(l.DeviceInstance, func(i, j int) bool {
+				a1, _ := strconv.Atoi(l.DeviceInstance[i].Address)
+				a2, _ := strconv.Atoi(l.DeviceInstance[j].Address)
+				return a1 < a2
+			})
+		}
+	}
+	sort.Slice(k.GroupAddresses.GroupRanges.GroupRange, func(i, j int) bool {
+		a1, _ := strconv.Atoi(k.GroupAddresses.GroupRanges.GroupRange[i].RangeStart)
+		a2, _ := strconv.Atoi(k.GroupAddresses.GroupRanges.GroupRange[j].RangeStart)
+		return a1 < a2
+	})
+	for _, gr1 := range k.GroupAddresses.GroupRanges.GroupRange {
+		sort.Slice(gr1.GroupRange, func(i, j int) bool {
+			a1, _ := strconv.Atoi(gr1.GroupRange[i].RangeStart)
+			a2, _ := strconv.Atoi(gr1.GroupRange[j].RangeStart)
+			return a1 < a2
+		})
+		for _, gr2 := range gr1.GroupRange {
+			sort.Slice(gr2.GroupAddress, func(i, j int) bool {
+				a1, _ := strconv.Atoi(gr2.GroupAddress[i].Address)
+				a2, _ := strconv.Atoi(gr2.GroupAddress[j].Address)
+				return a1 < a2
+			})
+		}
 	}
 	return &k, nil
 }
