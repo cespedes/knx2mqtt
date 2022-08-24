@@ -25,8 +25,8 @@ address 2/5/7 9.001 myroom/temperature
 	...
 */
 type addrNameType struct {
-	Name string
-	DPT  string
+	Names []string
+	DPT   string
 }
 
 type Gateway struct {
@@ -42,6 +42,7 @@ type Config struct {
 	Port        int                             // TCP port to listen HTTP requests
 	Devices     map[cemi.IndividualAddr]string  // List of KNX devices
 	Addresses   map[cemi.GroupAddr]addrNameType // List of KNX group addresses
+	Names       map[string]cemi.GroupAddr       // Reverse list (including aliases)
 }
 
 type UnknownDPT []byte
@@ -69,6 +70,7 @@ func ReadConfig(filename string) (*Config, error) {
 	var c Config
 	c.Devices = make(map[cemi.IndividualAddr]string)
 	c.Addresses = make(map[cemi.GroupAddr]addrNameType)
+	c.Names = make(map[string]cemi.GroupAddr)
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
@@ -127,7 +129,7 @@ func ReadConfig(filename string) (*Config, error) {
 			}
 			c.Devices[addr] = tokens[2]
 		case "address":
-			if len(tokens) != 4 {
+			if len(tokens) < 4 {
 				return nil, fmt.Errorf("syntax error in %s line %d", filename, lineNum)
 			}
 			aAddr := tokens[1]
@@ -138,7 +140,12 @@ func ReadConfig(filename string) (*Config, error) {
 			if err != nil {
 				return nil, fmt.Errorf("error in %s line %d: %w", filename, lineNum, err)
 			}
-			c.Addresses[addr] = addrNameType{Name: aName, DPT: aDPT}
+			c.Addresses[addr] = addrNameType{Names: tokens[3:], DPT: aDPT}
+			c.Names[aName] = addr
+			// Add aliases:
+			for i := 4; i < len(tokens); i++ {
+				c.Names[tokens[i]] = addr
+			}
 		default:
 			return nil, fmt.Errorf("syntax error in %s line %d: unrecognized token %s", filename, lineNum, tokens[0])
 		}

@@ -16,7 +16,7 @@ func GroupAddress(s string) string {
 	return fmt.Sprintf("%d/%d/%d", i>>11, (i>>8)&7, i&255)
 }
 
-func PrintProject(k *Project) {
+func PrintProject(k *Project, verbose bool) {
 	for _, a := range k.Topology.Area {
 		fmt.Printf("Area %s (id=%q name=%q)\n", a.Address, a.Id, a.Name)
 		for _, l := range a.Line {
@@ -25,6 +25,11 @@ func PrintProject(k *Project) {
 				fmt.Printf("Device %s.%s.%s", a.Address, l.Address, d.Address)
 				fmt.Printf(" (id=%q name=%q comment=%q description=%q productrefid=%q serialnumber=%q)\n",
 					d.Id, d.Name, d.Comment, d.Description, d.ProductRefId, d.SerialNumber)
+				if verbose {
+					for _, c := range d.ComObjectInstanceRef {
+						fmt.Printf("  - ComObjectInstanceRef: Text=%q Links=%q\n", c.Text, c.Links)
+					}
+				}
 			}
 		}
 	}

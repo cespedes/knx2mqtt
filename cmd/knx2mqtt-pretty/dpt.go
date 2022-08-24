@@ -61,7 +61,16 @@ func SetDPTFromString(d dpt.DatapointValue, value string) error {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		u, err := strconv.ParseUint(value, 10, 64)
 		if err != nil {
-			return err
+			switch strings.ToLower(value) { // for DPT 20.105 (HVACContrMode):
+			case "heat":
+				u = 1
+			case "cool":
+				u = 3
+			case "fan", "fan only", "fan-only":
+				u = 9
+			default:
+				return err
+			}
 		}
 		Val.Elem().SetUint(u)
 	case reflect.Float32, reflect.Float64:

@@ -1,18 +1,24 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 )
 
 func main() {
-	if len(os.Args) != 2 {
+	verbose := false
+	flag.BoolVar(&verbose, "v", false, "add verbosity")
+	flag.Parse()
+
+	if len(flag.Args()) != 1 {
 		fmt.Println("Must use 1 arg.")
 		os.Exit(1)
 	}
-	fmt.Println("File:", os.Args[1])
+	filename := flag.Args()[0]
+	fmt.Println("File:", filename)
 
-	ets, err := Uncompress(os.Args[1])
+	ets, err := Uncompress(filename)
 	if err != nil {
 		panic(err)
 	}
@@ -22,5 +28,5 @@ func main() {
 		panic(err)
 	}
 
-	PrintProject(k)
+	PrintProject(k, verbose)
 }

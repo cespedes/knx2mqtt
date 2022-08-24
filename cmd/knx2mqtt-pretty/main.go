@@ -105,9 +105,9 @@ func (e Event) String() string {
 			dp = new(UnknownDPT)
 		}
 		if err := dp.Unpack(e.Data); err != nil {
-			fmt.Printf("Network: Error parsing %v for %v\n", e.Data, e.Destination)
+			fmt.Printf("Network: Error parsing %v for %v (%s): %s\n", e.Data, e.Destination, nt.DPT, err.Error())
 		} else {
-			str += " " + nt.Name + "=" + fmt.Sprint(dp)
+			str += " " + nt.Names[0] + "=" + fmt.Sprint(dp)
 		}
 	}
 
@@ -133,6 +133,7 @@ func main() {
 	if s.Debug {
 		fmt.Printf("devices: %v\n", config.Devices)
 		fmt.Printf("addresses: %v\n", config.Addresses)
+		fmt.Printf("names: %v\n", config.Names)
 	}
 
 	client, err := NewMQTTClient(config.MQTTServer, MQTTPort)
@@ -162,12 +163,18 @@ func main() {
 					continue
 				}
 				if err := dp.Unpack(e.Data); err != nil {
-					fmt.Printf("Network: Error parsing %v for %v\n", e.Data, e.Destination)
+					fmt.Printf("Network: Error parsing %v for %v (%s): %s\n", e.Data, e.Destination, nt.DPT, err.Error())
 					continue
 				}
-				topic := fmt.Sprintf("%s/%s", config.MQTTPrefix2, nt.Name)
 				value := e.Time.Format("20060102-150405") + " " + fmt.Sprint(dp)
-				err = client.PublishRetain(topic, value)
+				for _, name := range nt.Names {
+					topic := fmt.Sprintf("%s/%s", config.MQTTPrefix2, name)
+					err = client.PublishRetain(topic, value)
+					if err != nil {
+						fmt.Printf("MQTT: Error publishing to %s: %v\n", topic, err.Error())
+						continue
+					}
+				}
 			}
 		case msg := <-mqttChan2:
 			cmd := strings.Split(string(msg.Payload), " ")
@@ -190,17 +197,15 @@ func main() {
 			groupName := cmd[1]
 			var groupAddr cemi.GroupAddr
 			var DPT string
-			for key, val := range config.Addresses {
-				if groupName == val.Name {
-					groupAddr = key
-					DPT = val.DPT
-					break
-				}
-			}
-			if groupAddr == 0 || DPT == "" {
+
+			groupAddr, ok := config.Names[groupName]
+			if !ok {
 				fmt.Printf("received command to wrong group: %q\n", string(msg.Payload))
 				continue
 			}
+			val := config.Addresses[groupAddr]
+			DPT = val.DPT
+
 			dp, ok := dpt.Produce(DPT)
 			if !ok {
 				fmt.Printf("Error: unknown type %v in config file\n", DPT)
@@ -215,6 +220,9 @@ func main() {
 				}
 			}
 			data := dp.Pack()
+			if command == knx.GroupRead {
+				data = []byte{0}
+			}
 			fmt.Printf("MQTT: received cmd %q: will send packet to %s\n", msg.Payload, groupAddr.String())
 			topic := fmt.Sprintf("%s/cmd", config.MQTTPrefix1)
 			groupEvent := knx.GroupEvent{Command: command, Destination: groupAddr, Data: data}

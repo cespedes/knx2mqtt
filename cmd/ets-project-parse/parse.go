@@ -23,13 +23,17 @@ type Topology struct {
 			Address        string `xml:",attr"`
 			Name           string `xml:",attr"`
 			DeviceInstance []struct {
-				Id           string `xml:",attr"`
-				Address      string `xml:",attr"`
-				Name         string `xml:",attr"`
-				Comment      string `xml:",attr"`
-				Description  string `xml:",attr"`
-				ProductRefId string `xml:",attr"`
-				SerialNumber string `xml:",attr"`
+				Id                   string `xml:",attr"`
+				Address              string `xml:",attr"`
+				Name                 string `xml:",attr"`
+				Comment              string `xml:",attr"`
+				Description          string `xml:",attr"`
+				ProductRefId         string `xml:",attr"`
+				SerialNumber         string `xml:",attr"`
+				ComObjectInstanceRef []struct {
+					Text  string `xml:",attr"`
+					Links string `xml:",attr"`
+				} `xml:"ComObjectInstanceRefs>ComObjectInstanceRef"`
 			}
 		}
 	}
